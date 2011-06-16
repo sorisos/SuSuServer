@@ -154,27 +154,7 @@ public class HttpRequest {
 		} 
 		return cookies;
 	}
-	/*
-	public String getSessionId() {
-		//* http://www.w3.org/TR/WD-session-id 
-		String sessionID = null;
-		if (headerFields.containsKey("SID")) {
-			try {
-				String sid = headerFields.get("SID");
-				String[] tmp =sid.split(":");
-				try {
-					sessionID = tmp[2];
-				} catch (ArrayIndexOutOfBoundsException e){
-					log("Couldnt parse session identifier from SID-field");
-				}
-			} catch (PatternSyntaxException e) {
-				log("no id found in SID-field");
-			}
-		}
-		return sessionID;
-		
-	}
-	*/
+
 	public String getSessionIdFromCookie() {
 		//TODO: regex, handle svereal cookie variables...
 		String sid = null;
@@ -187,28 +167,4 @@ public class HttpRequest {
 		}
 		return sid;
 	}
-	
-	/** if requestURI is "example.html" this method returns ".html" 
-	 * the following requestURI's returns null: null, "example", 
-	 * the case "example.html/" - is sent as "example.html" by most(?) browsers
-	 * and is not handled in this function
-	 **/
-	/*
-	public String getRequestURISuffix() {
-		String requestURISuffix = null;
-		if (requestURI != null) {
-			int start = requestURI.lastIndexOf(".");
-			if (start > -1) {
-				requestURISuffix = requestURI.substring(start);
-				if (requestURISuffix.contains("/")) {
-					requestURISuffix = null;
-				}
-			} else {
-				log("requestURI contains dot but...");
-			}
-		}
-		return requestURISuffix;
-	}
-	*/
-
 }

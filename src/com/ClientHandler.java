@@ -53,7 +53,7 @@ public class ClientHandler implements Runnable {
 			} else {
 				numbOfHeaderLines++;
 				System.err.println("Failed to retrive header");
-				MethodHandler.respondStatusCode(this, 500);
+				HttpMethodHandler.respondStatusCode(this, 500);
 			}
 
 			/** read rest of header **/
@@ -68,7 +68,6 @@ public class ClientHandler implements Runnable {
 					numbOfHeaderLines++;
 				}
 			}
-			
 			log("-------END HEADER-------");
 			
 			/** we got the header. set the sessionId form cookies or create a new in none exists.**/
@@ -76,18 +75,19 @@ public class ClientHandler implements Runnable {
 			
 			/** if no header retrieved. (it happens ;( ). Respond 500 Internal Server Error **/  
 			if (numbOfHeaderLines<1) {
-				MethodHandler.respondStatusCode(this, 500);
+				HttpMethodHandler.respondStatusCode(this, 500);
+				//TODO: should return here/error handling here... or make shure that we always get the header
 			}
-		
+			/** see if request is acceptable and call the corresponding method **/
 			if (request.getMethod() == "GET") {
-				MethodHandler.doGet(this);
+				HttpMethodHandler.doGet(this);
 			} else if (request.getMethod() == "POST"){
-				int postMethodCode = MethodHandler.doPost(this);
+				int postMethodCode = HttpMethodHandler.doPost(this);
 				switch (postMethodCode) {
-				case MethodHandler.FILE_UPLOAD:
+				case HttpMethodHandler.FILE_UPLOAD:
 					handleFileUpload(request, inputStream);
 					break;
-				case MethodHandler.FILE_COMMENTS:
+				case HttpMethodHandler.FILE_COMMENTS:
 					handleFileCommentPost(request, inputStream);
 					break;
 				default:
@@ -104,22 +104,13 @@ public class ClientHandler implements Runnable {
 			try {				
 				socket.close();
 				log("Client socket is closed");
-				//socket.shutdownInput();
 			} catch (IOException e) { 
 				log("Failed to close Client socket");
 			}
 		}
 		log("End of thread end of life");
 	}//END run
-	private void endThread() {
-		try {
-			log("Closing client socket");
-			socket.close();
-			//socket.shutdownInput();
-		} catch (IOException e) { e.printStackTrace(); }
-		
-	}
-	
+
 	/** Set the session id for this thread/class instance. 
 	 * if none found in the cookies, then create new a new from the UUID class.
 	 * Must be called first or early in the constructor as many methods rely 
@@ -153,7 +144,7 @@ public class ClientHandler implements Runnable {
 
 	private void handleFileUpload(HttpRequest request, InputStream inputStream) throws IOException {
 		log("Processing POST request ...");
-		MethodHandler.respondStatusCode(this, 200);
+		HttpMethodHandler.respondStatusCode(this, 200);
 		String contentDisposition = null;
 		String postBodyLine;
 		/** read the first lines of the post body and retrieve the Content-Disposition line **/
@@ -166,7 +157,6 @@ public class ClientHandler implements Runnable {
 
 		int contentLength = request.getContentLength();
 		String boundary = request.getContentTypeBoundary(); 
-		//if (contentLength > -1 && boundary != null) {
 		if (contentLength < 1) {
 			System.err.println("Content-Length  <1 in post file request(sessionId: "+ sessionId +")");
 			return;
@@ -185,7 +175,7 @@ public class ClientHandler implements Runnable {
 		} 
 	}
 
-	
+	/** the 'magic' method of this class. handles the upload stream... **/
 	public void handleClientUploadStream(InputStream inputStream, int contentLength, byte[] boundaryBytes, String contentDisposition) {
 		/** don't want to allocate memory for a huge buffer for the file in the post-body, 
 		 * which make the while loops below somewhat unnecessary complicated and
@@ -197,13 +187,12 @@ public class ClientHandler implements Runnable {
 		ust.sid = sessionId.toString();
 		ust.timeStarted = System.currentTimeMillis() / 1000L;;
 		ust.postContentLength = contentLength;
-		HttpServer.uploadSessionLog.put(sessionId, ust);
+		HttpServer.uploadSessions.put(sessionId, ust);
 		
 		RegexUtil ru = new RegexUtil("filename=\".{3,}\"", "filename=\"".length(), 1);
 		ust.fileName = ru.getSubString(ru, contentDisposition);
 		
 		log("Reading POST body input stream (contentLength: " + contentLength +")...");
-		//postContentLength = contentLength;
 		int postByteCounter = 0;
 
 
@@ -239,7 +228,6 @@ public class ClientHandler implements Runnable {
 				compareBuffer[compareBuffer.length-1] = b[0];// add new byte last
 				
 				while(compareIter < boundaryBytes.length) { // compare
-					//log("comparsion ("+compareIter+"): "+ compareBuffer[compareIter] +" "+ boundaryBytes[compareIter]);
 					if(compareBuffer[compareIter] != boundaryBytes[compareIter]) {
 						/** false alarm. this was no boundary line  **/
 						compareIter=0;
@@ -247,7 +235,7 @@ public class ClientHandler implements Runnable {
 					}
 					compareIter++;
 				}
-				if(compareIter > boundaryBytes.length-3) { //possible bug. matches CR+LF-chars at end of boundary line?
+				if(compareIter > boundaryBytes.length-3) { //possible bug? matches CR+LF-chars at end of boundary line?
 					log("end of filebytes");
 					ust.allFileBytesReceived = true;
 					break;
@@ -269,7 +257,7 @@ public class ClientHandler implements Runnable {
 			while (inputStream.available() >0 && postByteCounter<contentLength) {
 				/** 
 				 * read the remaining data from the input stream. 
-				 * we don't need the data as it's just the last boundary-line, 
+				 * we don't need the data as it's just the last boundary-line(s), 
 				 * but the client/browser want us to have it.
 				 * **/
 				inputStream.read(b);
@@ -282,7 +270,8 @@ public class ClientHandler implements Runnable {
 				fileOutput.close();
 
 				if (ust.allFileBytesReceived) {
-					MethodHandler.getMap.put(ust.fullFilePath, MethodHandler.FILE_DOCUMENT); //add to index
+					//add the uploaded file to the doc -index
+					HttpMethodHandler.getMap.put(ust.fullFilePath, HttpMethodHandler.FILE_DOCUMENT); 
 				}
 				
 						                                                         
@@ -297,14 +286,8 @@ public class ClientHandler implements Runnable {
 	}
 
 
-
-	public void log (String msg) {
-		System.out.println("[ClientHandler, sid: "+sessionId+"]: "+msg);
-		return;
-	}
-
+	/** add the comments to the related file **/
 	private void handleFileCommentPost(HttpRequest request, InputStream inputStream) throws IOException {
-
 		String boundaryLine = request.getContentTypeBoundary();
 
 		while(inputStream.available()>0) {	
@@ -329,6 +312,7 @@ public class ClientHandler implements Runnable {
 		}
 	}
 	
+	
 	/**
 	 * One might argue why not use InputStreamReader.readLine()? Well it turns out 
 	 * this won't work as the first bytes (about 7656 b) in the post body byte-stream 
@@ -336,10 +320,8 @@ public class ClientHandler implements Runnable {
 	 * The JSP HttpServletRequest documentations states that it's unwise/forbidden to use both 
 	 * InputStream and InputStreamReader and the lost bytes might relate to this, even if the 
 	 * JSP-docs might not be applicable to the JRE.
-	 * 
 	 */
 	private String readLineFromStream(InputStream inputStream) {
-		/** http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4175635 **/
 		StringBuilder stringBuilder = new StringBuilder();
 		byte[] b = new byte[1]; // read buffer
 		
@@ -366,6 +348,10 @@ public class ClientHandler implements Runnable {
 		}
 	}
 	
+	public void log (String msg) {
+		System.out.println("[ClientHandler, sid: "+sessionId+"]: "+msg);
+		return;
+	}
 }//END class
 
 

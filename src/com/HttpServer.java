@@ -16,17 +16,14 @@ public class HttpServer{
 	public static String htmlDir = "../html"; 
 	private static boolean running = true; // set to false to end server 
 
-	static Map<UUID, ClientHandler> uploadSessions = new HashMap<UUID, ClientHandler>();
 	
-	/**@endedUploadSessions :
-	 *  DB-simulation: this map is the temporary log for aborted or completed uploads. 
-	 * In a more completed solution this log be in a database.
+	/**@uploadSessions :
+	 *  this map is the temporary log for aborted or completed uploads. 
 	 */
-	static Map<UUID, UploadSessionTracker> uploadSessionLog = new HashMap<UUID, UploadSessionTracker>();
+	static Map<UUID, UploadSessionTracker> uploadSessions = new HashMap<UUID, UploadSessionTracker>();
 	
 	public static void main(String[] args) throws IOException{ 
 
-		
 		/** parse arguments, if any **/
 		  if (args.length >= 1) {
 			  try {
@@ -40,7 +37,7 @@ public class HttpServer{
 		  }
 	
 		ServerSocket serverSocket = null;
-		new MethodHandler();
+		new HttpMethodHandler();
 		
 		try {
 			serverSocket = new ServerSocket(PORT_NR); 

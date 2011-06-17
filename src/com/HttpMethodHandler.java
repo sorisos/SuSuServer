@@ -9,36 +9,37 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class MethodHandler {
+public class HttpMethodHandler {
 /** 
- * all allowed/possible requests are stored in the HashMap 'getMap' or postMap for fast response.
+ * All allowed/possible requests are stored in the HashMaps for fast response.
  * 
- * Note that the clients PrintStream is intitalized in this class but terminated(ie closed) in 
+ * Note that the clients PrintStream is frequently used in this class but terminated(ie closed) in 
  * the ClientHandler class when the corresponding socket is closed.
  * (not sure this solution is thread safe)
  */
-	/**@getMap: this map contains both documents stored on disc in the defined doc-directory 
+	/**@getMap: this map contains both documents stored on disc (in the defined html-dir) 
 	 * and CGI-scripts. scripts that are methods in this class.**/
 	public static Map<String, Integer> getMap = new HashMap<String, Integer>();
+	/** methods handling post are in the ClientHandler thread. The postMap is only used
+	 * to decide which of the methods to use.
+	 */
 	public static Map<String, Integer> postMap = new HashMap<String, Integer>();
 	
-	/** GET map codes **/
+	/** GET cases **/
+	
 	final static int UNKNOWN_GET = 0;
 	final static int DEFAULT_DOCUMENT = 1;
 	final static int FILE_DOCUMENT = 2;
-	/** GET method CGI-scripts **/
 	final static int FILE_UPLOAD_PROGRESS = 3;
 
-	/** POST map codes **/
-	/** POST method CGI-scripts **/
+	/** POST cases **/
+
 	final static int UNKNOWN_POST = 0;
 	final static int FILE_UPLOAD = 1;
 	final static int FILE_COMMENTS = 2;
 	
-	//final static String HTTP_VER = "HTTP/1.0";
 	
-	/** Constructor **/
-	public MethodHandler() {
+	public HttpMethodHandler() {
 		/** Init GET method map (getMap) **/
 		getMap.put("/upload_progress.jrp", FILE_UPLOAD_PROGRESS);
 		getMap.put(null, DEFAULT_DOCUMENT);
@@ -76,22 +77,18 @@ public class MethodHandler {
 		switch (responseCode) {
 
 		case FILE_DOCUMENT:
-			System.out.println("case DOCUMENT");
 			respondRequestedDocument(client, HttpServer.htmlDir+client.request.getRequestURI());
 			break;
 			
 		case DEFAULT_DOCUMENT:
-			System.out.println("case DEFAULT_DOCUMENT");
 			respondRequestedDocument(client, HttpServer.htmlDir+"/index.html");
 			break;
 		
 		case UNKNOWN_GET:
-			System.out.println("case UNKNOWN_GET");
 			respondStatusCode(client, 404);
 			break;
 			
 		case FILE_UPLOAD_PROGRESS:
-			System.out.println("case UPLOAD_PROGRESS");
 			respondUploadProgress(client);       
 			break;
 		
@@ -101,29 +98,31 @@ public class MethodHandler {
 		}
 	}
 
+	/** methods relate to the CGI call "/upload_progress.jrp".
+	 * tries to find the current upload session in the uploadSession hashmap and respond the
+	 * current completion in percent
+	 * @param client - the instance ClientHandler who made the request
+	 */
 	public static void respondUploadProgress(ClientHandler client){
 		UUID uuid = client.getSessionId();
 		PrintStream outStream = client.getOutputStream();
 		
-		if (HttpServer.uploadSessionLog.containsKey(uuid)) {
+		if (HttpServer.uploadSessions.containsKey(uuid)) {
 			outStream.println("HTTP/1.1 200 OK"); 
 			outStream.println("Server : SuUpload 0.1 Beta"); 
 			outStream.println("Content-Type: text/xml");
 			outStream.println("Cache-Control: no-cache, must-revalidate");
-			outStream.println("Set-Cookie: sid="+uuid.toString()); //needed?
-				outStream.println(); //- end of header
-				UploadSessionTracker uploadLog = HttpServer.uploadSessionLog.get(uuid);
-				outStream.println("<?xml version='1.0'?>");
-				outStream.println("<DOCUMENT>");
-				
-				log("upload session found. replying upload progress percent" + uploadLog.getUploadProgress());
-				
-				outStream.println("<progress>"+uploadLog.getUploadProgress()+"</progress>");
-				outStream.println("<active>"+uploadLog.active+"</active>");
-				outStream.println("<complete>"+uploadLog.allFileBytesReceived+"</complete>");
-				outStream.println("<fileurl>"+uploadLog.fullFilePath+"</fileurl>");
-				outStream.println("</DOCUMENT>");
-			
+			outStream.println("Set-Cookie: sid="+uuid.toString()); //needed here?
+			outStream.println(); //- end of header
+			UploadSessionTracker uploadLog = HttpServer.uploadSessions.get(uuid);
+			outStream.println("<?xml version='1.0'?>");
+			outStream.println("<DOCUMENT>");
+			outStream.println("<progress>"+uploadLog.getUploadProgress()+"</progress>");
+			outStream.println("<active>"+uploadLog.active+"</active>");
+			outStream.println("<complete>"+uploadLog.allFileBytesReceived+"</complete>");
+			outStream.println("<fileurl>"+uploadLog.fullFilePath+"</fileurl>");
+			outStream.println("</DOCUMENT>");
+
 		}  else { // something is wrong
 			System.err.println("Upload progress requested for a session that dosen't exists.");
 			System.err.println("(Requested sessionId: "+ uuid +").");
@@ -202,8 +201,7 @@ public class MethodHandler {
 	
 
 	/** 
-	 * this method desire what method in ClientHandler that 
-	 * should be called to handle the Post request
+	 * this method return a number that corresponds to a method in the ClientHandler class. 
 	 * **/
 	public static int doPost(ClientHandler client) {
 	
@@ -217,9 +215,4 @@ public class MethodHandler {
 		}
 		return postMethodCode;
 	}
-	
-	public static void log(String msg) {
-		System.out.println("[MethodHandler]: "+ msg);
-	}
-	
 }

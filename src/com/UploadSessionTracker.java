@@ -1,7 +1,7 @@
 package com;
 
 public class UploadSessionTracker {
-	/** this class keeps track of user upload sessions and saved file-comments. 
+	/** this class keeps track of upload sessions and the related comments. 
 	 */
 	    /**@active: set to true when a client upload is in progress **/
 	    public boolean active = false;

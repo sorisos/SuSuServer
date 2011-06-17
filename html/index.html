@@ -1,0 +1,257 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<!--Note: as the java server currently only supports html and not separate .css or .js files
+everything is placed in this html document -->
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>SCBD</title>
+<style type="text/css">
+
+div#progressBarContainerId {
+	border: 2px solid;
+	border-color: #000C3F;
+	-moz-border-radius:6px; 
+	-webkit-border-radius: 6px;
+	width: 250px; 
+	margin: 0px;
+	padding: 0px;
+	text-align: left;
+}
+
+div#progressBarId {
+	color: white;
+	
+	background: #999; /* non CSS3*/
+	background: -moz-linear-gradient(top,  #F50,  #A40); /* FF 3.6+ */
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#F05000', endColorstr='#A04000'); /*IE*/
+	background: -webkit-gradient(linear, left top, left bottom, from(#F50), to(#A40)); /*webkit*/
+	
+	height: 12px;
+	padding-bottom: 2px;
+	font-size: 12px;
+	text-align: center;
+	overflow: hidden;
+}
+div#progressTextId {
+	color:#000000;
+	font-size:200%;
+	font-family: "Verdana", Sans-serif;
+	/*letter-spacing: 2px;*/
+	font-size:1em;
+	text-align: left;
+	white-space:nowrap; /* *.all browsers */
+}
+
+/*div#uploadStatusTextId {*/
+.statusText {
+	color:#000000;
+	font-family: "Verdana", Sans-serif;
+	/*letter-spacing: 2px;*/
+	font-size:0.8em;
+	text-align: left;
+}
+
+table.mtable{
+	width: 10%;
+	border:0px solid; 
+	border-color:#AAB2B7; 
+	-moz-border-radius:15px;
+	-webkit-border-radius: 15px;
+	border-collapse:separate;
+	border-spacing: 6px;
+}
+h1 {
+	color:#000000;
+	font-size: 1.5em;
+	font-family: "Verdana", Sans-serif;
+	letter-spacing: 3px;
+	font-size:1em;
+	text-align: center;
+}
+h2 {
+	color:#000000;
+	font-size:200%;
+	font-family: "Verdana", Sans-serif;
+	letter-spacing: 2px;
+	font-size:1em;
+}
+</style>
+
+<script type="text/javascript">
+var request, 
+	progressBar,
+	xmlhttp,
+	uploadRequest=false,
+	progressText, 
+	progressValue=0, 
+	pollInterval=false;
+
+
+window.onload = function () {
+	progressBar = document.getElementById('progressBarId');
+	progressBar.style.width = '0%'; 
+	progressText = document.getElementById("progressTextId");
+	
+	try {
+		xmlhttp = new XMLHttpRequest();
+	}
+	catch (e1) {
+		document.getElementById('debugText').innerHTML="Failed to create new XMLHttpRequest. Old browser?";
+	}
+};
+
+function updateProgressBar() {
+	if (xmlhttp.readyState==4 && xmlhttp.status==200) {
+		progressValue = xmlhttp.responseXML.getElementsByTagName('progress')[0].firstChild.nodeValue;	
+	//	var state = uploadRequest.readyState;
+//		document.getElementById('debugText').innerHTML= "uploadRequest.readyState: "+state;
+		switch(uploadRequest.readyState) {
+		case 1: //loading 
+			break;
+		case 2: //loaded
+			break;
+		case 3: //interactive
+			endPolling();
+			document.getElementById('uploadStatusTextId').innerHTML= "Sorry, error while uploading. <a href='javascript:startUpload()'>Restart upload</a>";
+			document.getElementById("abortButtonId").innerHTML = "";
+			break;
+		case 4: //complete
+			endPolling();
+			var fileUrl = xmlhttp.responseXML.getElementsByTagName('fileurl')[0].firstChild.nodeValue;
+			document.getElementById('uploadStatusTextId').innerHTML= "<a href='"+fileUrl+"'>"+fileUrl+"</a> ";	
+			document.getElementById("abortButtonId").innerHTML = "";
+			break;
+		default:
+		}
+		progressText.innerHTML= progressValue+'%.';
+		progressBar.style.width = progressValue+'%';		
+	} else {
+			document.getElementById('debugText').innerHTML= "xmlhttp !=4 status =!200";
+		//...
+	}
+}
+
+function sendUploadProgressRequest() {
+	xmlhttp.open("GET","upload_progress.jrp"); //asynchronous
+	xmlhttp.send();
+	xmlhttp.onreadystatechange = updateProgressBar;
+}
+	
+function startPolling() {
+    if (pollInterval == false) { //only start new interval if none already exists
+        pollInterval = window.setInterval('sendUploadProgressRequest()', 1000);
+    }   
+}
+
+function endPolling() {
+	if (xmlhttp.readyState >0 && xmlhttp.readyState <4) {
+		xmlhttp.abort();
+	}
+	window.clearInterval(pollInterval);
+	pollInterval = false;
+}
+
+function startUpload() {
+	document.getElementById("abortButtonId").innerHTML = "<button type='button' onclick='abortUpload()'>Cancel Upload</button>";
+	document.getElementById("saveStatusTextId").innerHTML = "";
+	var formData = new FormData(document.getElementById("fileUploadFormId"));
+	try {
+		uploadRequest = new XMLHttpRequest();
+	} catch (e1) {
+		//...
+	}
+	progressText.innerHTML = "0%";
+	uploadRequest.open("POST", "file_upload.jrp");
+	uploadRequest.send(formData);
+	startPolling();
+}
+
+function abortUpload() {
+	endPolling();
+	document.forms["fileUploadFormId"].reset();
+	document.getElementById('uploadStatusTextId').innerHTML = "Upload was canceled";
+	progressBar.style.width = '0%';
+	progressText.innerHTML = "0%";
+	uploadRequest.abort();
+	uploadRequest = false;
+	document.forms["fileUploadFormId"].reset();
+	document.getElementById("abortButtonId").innerHTML = "";
+	progressText.innerHTML = "";
+}
+
+function postComments() {
+	if (uploadRequest == false) { // if upload not started
+		document.getElementById("saveStatusTextId").innerHTML = "You haven't uploaded anything yet!";
+	} else if (uploadRequest.readyState != 4) { //if upload not done
+		document.getElementById("saveStatusTextId").innerHTML = "Upload in progress, please wait until it's done.";
+	} else if (uploadRequest.readyState == 4) { //if upload is complete
+		var formData = new FormData();
+		formData.append("hello", "Fracking hello");
+		formData.append("comments", document.getElementById('commentsTextAreaId').value);
+		var xhr = new XMLHttpRequest();
+		xhr.open("POST", "file_comments.jrp");
+		xhr.send(formData);
+	}
+}	
+
+/*** C&P BUFFER ***
+
+	<input id="fileInputId" type="file" name="fileInput" value="" size="40" onChange="submitFileUploadForm()"/>
+		<input type="submit" name="submit_button" value="" onclick="startPolling()"/>
+	<form id="fileUploadFormId" name="fileUploadForm" action="file_upload.jrp" method="POST" onsubmit="return false;" enctype="multipart/form-data">	
+			document.getElementById('debugText').innerHTML= "fileName "+fileName;
+			
+	var fileName = form.fileInput.value;
+	console.log("fileName");
+	console.log(fileName);
+
+<link rel="icon" type="image/png" href="./favicon.ico">
+
+
+!abortButton.disabled
+
+/file_comments.jrp!!!!
+
+*****/
+</script>
+<body>
+<table class="mtable" align="center">
+  <tr>
+  <td>
+  	<h1>..:: UPLOADER ::..</h1>
+  </td>
+</tr>
+<tr>
+	<td>
+	<form id="fileUploadFormId" name="fileUploadForm" method="POST" enctype="multipart/form-data">
+	<input id="fileInputId" type="file" name="fileInput" value="" size="50" onChange="startUpload();"/>
+	</form>
+	</td>
+</tr>
+<tr>
+    <td>
+	<div id="progressBarContainerId">
+		<div id="progressBarId" style="width: -%"></div>
+	</div>
+	<div id="abortButtonId"></div>
+	</td>
+<tr>
+	<td>
+	<div id="progressTextId">-</div> <div id="uploadStatusTextId" class="statusText"></div>
+	</td>
+</tr>
+<tr>
+    <td>
+	<textarea id="commentsTextAreaId" style="resize: none;" rows="10" cols="50"> write some comments </textarea>
+	<br>
+	<button type="button" onclick="postComments()">Save</button><div id="saveStatusTextId" class="statusText"></div>
+	</td>
+</tr>
+<tr>
+    <td>			
+	</td>
+</tr>
+
+</table>
+</body>
+</html> 
